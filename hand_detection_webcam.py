@@ -1,7 +1,8 @@
 import cv2
-import mediapipe as mp 
+import mediapipe as mp
 import joblib
-import numpy as np 
+import numpy as np
+import sklearn
 
 mp_drawing = mp.solutions.drawing_utils
 mp_hands = mp.solutions.hands
@@ -12,76 +13,83 @@ hands = mp_hands.Hands(
 
 cap = cv2.VideoCapture(0)
 
+
 def data_clean(landmark):
-  
-  data = landmark[0]
-  
-  try:
-    data = str(data)
+    data = landmark[0]
 
-    data = data.strip().split('\n')
+    try:
+        data = str(data)
 
-    garbage = ['landmark {', '  visibility: 0.0', '  presence: 0.0', '}']
+        data = data.strip().split('\n')
 
-    without_garbage = []
+        garbage = ['landmark {', '  visibility: 0.0', '  presence: 0.0', '}']
 
-    for i in data:
-        if i not in garbage:
-            without_garbage.append(i)
+        without_garbage = []
 
-    clean = []
+        for i in data:
+            if i not in garbage:
+                without_garbage.append(i)
 
-    for i in without_garbage:
-        i = i.strip()
-        clean.append(i[2:])
+        clean = []
 
-    for i in range(0, len(clean)):
-        clean[i] = float(clean[i])
+        for i in without_garbage:
+            i = i.strip()
+            clean.append(i[2:])
 
-    
-    return([clean])
+        # for i in range(0, len(clean)):
+        #     clean[i] = float(clean[i])
 
-  except:
-    return(np.zeros([1,63], dtype=int)[0])
+        finalClean = []
+        for i in range(0, len(clean)):
+          if (i + 1) % 3 != 0:
+            # clean[i] = float(clean[i]) # Original
+            finalClean.append(float(clean[i]))
+
+        return ([finalClean])
+
+    except:
+        return np.zeros([1, 63], dtype=int)[0]
+
 
 while cap.isOpened():
-  success, image = cap.read()
-  
-  image = cv2.flip(image, 1)
-  
-  if not success:
-    break
+    success, image = cap.read()
 
-  # Flip the image horizontally for a later selfie-view display, and convert
-  # the BGR image to RGB.
-  image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-  # To improve performance, optionally mark the image as not writeable to
-  # pass by reference.
-  image.flags.writeable = False
-  results = hands.process(image)
+    image = cv2.flip(image, 1)
 
-  # Draw the hand annotations on the image.
-  image.flags.writeable = True
+    if not success:
+        break
 
-  image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+    # Flip the image horizontally for a later selfie-view display, and convert
+    # the BGR image to RGB.
+    image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+    # To improve performance, optionally mark the image as not writeable to
+    # pass by reference.
+    image.flags.writeable = False
+    results = hands.process(image)
 
-  if results.multi_hand_landmarks:
-    for hand_landmarks in results.multi_hand_landmarks:
-      mp_drawing.draw_landmarks(
-          image, hand_landmarks, mp_hands.HAND_CONNECTIONS)
+    # Draw the hand annotations on the image.
+    image.flags.writeable = True
 
-    cleaned_landmark = data_clean(results.multi_hand_landmarks)
-    #print(cleaned_landmark)
+    image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
 
-    if cleaned_landmark:
-      clf = joblib.load('model.pkl')
-      y_pred = clf.predict(cleaned_landmark)
-      image = cv2.putText(image, str(y_pred[0]), (50,150), cv2.FONT_HERSHEY_SIMPLEX,  3, (0,0,255), 2, cv2.LINE_AA) 
-    
-  cv2.imshow('MediaPipe Hands', image)
-  
-  if cv2.waitKey(5) & 0xFF == 27:
-    break
+    if results.multi_hand_landmarks:
+        for hand_landmarks in results.multi_hand_landmarks:
+            mp_drawing.draw_landmarks(
+                image, hand_landmarks, mp_hands.HAND_CONNECTIONS)
+
+        cleaned_landmark = data_clean(results.multi_hand_landmarks)
+        # print(cleaned_landmark)
+
+        if cleaned_landmark:
+            clf = joblib.load('model.pkl')
+            y_pred = clf.predict(cleaned_landmark)
+            image = cv2.putText(image, str(y_pred[0]), (50, 150), cv2.FONT_HERSHEY_SIMPLEX, 3, (0, 0, 255), 2,
+                                cv2.LINE_AA)
+
+    cv2.imshow('MediaPipe Hands', image)
+
+    if cv2.waitKey(5) & 0xFF == 27:
+        break
 
 hands.close()
 cap.release()
